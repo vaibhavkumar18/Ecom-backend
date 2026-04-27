@@ -9,6 +9,7 @@ const bcrypt = require("bcrypt");
 const authMiddleware = require("./middleware/auth");
 const cookieParser = require("cookie-parser");
 
+
 const isProd = process.env.NODE_ENV === "production";
 
 const cookieOptions = {
@@ -48,6 +49,8 @@ app.use(express.json());
 module.exports = app;
 async function connectToMongo() {
     try {
+        const dns = require("dns");
+        dns.setServers(["1.1.1.1", "8.8.8.8"])
         await client.connect();
         console.log("✅ Connected to MongoDB!");
         if (process.env.NODE_ENV !== 'production') { // Check if not in production
@@ -227,7 +230,6 @@ app.post("/login", async (req, res) => {
         const isPasswordMatch = await bcrypt.compare(password, user.Password);
 
         if (!isPasswordMatch) {
-            alert("Email/Password are incorrect!!!!");
             return res.status(401).json({
                 success: false,
                 message: "Invalid credentials"
@@ -253,7 +255,12 @@ app.post("/login", async (req, res) => {
             Orders: user.Orders
         };
 
-        res.cookie("token", token);
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: true,        // REQUIRED on HTTPS (Vercel)
+            sameSite: "None",    // REQUIRED for cross-origin
+            maxAge: 7 * 24 * 60 * 60 * 1000 // optional (7 days)
+        });
 
 
         return res.status(200).json({
@@ -302,7 +309,7 @@ app.post("/signup", async (req, res) => {
         const hashedPassword = await bcrypt.hash(Password, 10);
 
         // 3. Create user object
-        const Usersdata = {
+        const usersData = {
             Username,
             Name,
             Email,
@@ -316,7 +323,7 @@ app.post("/signup", async (req, res) => {
         };
 
         // 4. Insert user
-        const result = await collection.insertOne(Usersdata);
+        const result = await collection.insertOne(usersData);
 
         // after insert
         const userToSend = {
@@ -337,7 +344,12 @@ app.post("/signup", async (req, res) => {
             { expiresIn: "7d" }
         );
 
-        res.cookie("token", token);
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: true,        // REQUIRED on HTTPS (Vercel)
+            sameSite: "None",    // REQUIRED for cross-origin
+            maxAge: 7 * 24 * 60 * 60 * 1000 // optional (7 days)
+        });
 
         return res.status(201).json({
             success: true,
@@ -359,13 +371,13 @@ app.post('/my-profile', authMiddleware, async (req, res) => {
     const db = client.db(dbName);
     const collection = db.collection('Userdata');
     const { Username, Name, Email, Password, id, addToCart } = req.body;
-    const Usersdata = { Username, Name, Email, Password, id, addToCart };
+    const usersData = { Username, Name, Email, Password, id, addToCart };
 
     const user = await collection.findOne({ Email: Email });
     if (user) {
         return res.send({ success: false, message: "Email already exists" });
     } else {
-        const result = await collection.insertOne(Usersdata);
+        const result = await collection.insertOne(usersData);
         return res.send({ success: true, message: "Signup successful", data: result });
     }
 });
